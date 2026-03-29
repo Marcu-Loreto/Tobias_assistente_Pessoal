@@ -208,7 +208,15 @@ if prompt := st.chat_input("Digite sua mensagem aqui..."):
     }
 
     # Invoca o grafo e exibe a resposta
-    with st.spinner(f"⚙️ Processando I.A via {model_id}..."):
+    provider = (
+        "OpenAI"
+        if "gpt" in model_id.lower()
+        or "o1" in model_id.lower()
+        or "o3" in model_id.lower()
+        else "Google"
+    )
+    model_display = model_id.replace("-", " ").title()
+    with st.spinner(f"⚙️ Processando I.A via {provider} {model_display}..."):
         final_state = graph.invoke(initial_state)
 
         # Modo manutenção retorna em `response`, modo normal na lista messages

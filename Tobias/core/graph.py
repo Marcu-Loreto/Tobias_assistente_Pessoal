@@ -3,6 +3,7 @@ core/graph.py
 Construção do grafo LangGraph do Agente Tobias.
 Define: AgentState, Nodes, Tools e compilação do StateGraph.
 """
+
 import os
 import sys
 from typing import TypedDict, Annotated
@@ -16,9 +17,12 @@ from langgraph.prebuilt import ToolNode, tools_condition
 from core.utils import get_system_prompt, load_relatorio_skill, load_pesquisa_skill
 from core.memory import qdrant_memory
 from app.clients.llm_client import get_llm_client
+from app.tools.weather_tool import get_weather
 
 # Adicionar skills ao path para importação das tools
-skills_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".agent", "skills")
+skills_path = os.path.join(
+    os.path.dirname(os.path.dirname(__file__)), ".agent", "skills"
+)
 if skills_path not in sys.path:
     sys.path.insert(0, skills_path)
 
@@ -28,12 +32,14 @@ try:
     from calculator import calculate_math
     from validator import validate_data
     from security import check_password_security, analyze_injection_attempt
+
     AGENT_TOOLS = [
         search_internet,
         calculate_math,
         validate_data,
         check_password_security,
         analyze_injection_attempt,
+        get_weather,
     ]
 except ImportError as e:
     print(f"[AVISO] Erro ao carregar skills: {e}")
@@ -41,6 +47,7 @@ except ImportError as e:
 
 # Prompt principal do agente (carregado uma vez)
 SYSTEM_PROMPT = get_system_prompt()
+
 
 # -------------------------------------------------------
 # Estado do Agente (TypedDict para o LangGraph)
@@ -111,12 +118,16 @@ def normal_node(state: AgentState) -> dict:
     # 2. Skill de relatório C-Level (se solicitado)
     if state.get("is_report_request"):
         skill_content = load_relatorio_skill()
-        extra_system_parts.append(f"INSTRUÇÃO OBRIGATÓRIA — USE ESTA SKILL PARA FORMATAR O RELATÓRIO:\n{skill_content}")
+        extra_system_parts.append(
+            f"INSTRUÇÃO OBRIGATÓRIA — USE ESTA SKILL PARA FORMATAR O RELATÓRIO:\n{skill_content}"
+        )
 
     # 3. Skill de pesquisa aprofundada (se solicitado)
     if state.get("is_search_request"):
         skill_content = load_pesquisa_skill()
-        extra_system_parts.append(f"INSTRUÇÃO OBRIGATÓRIA — SIGA ESTA SKILL PARA A SUA PESQUISA:\n{skill_content}")
+        extra_system_parts.append(
+            f"INSTRUÇÃO OBRIGATÓRIA — SIGA ESTA SKILL PARA A SUA PESQUISA:\n{skill_content}"
+        )
 
     # Prepend SystemMessages adicionais antes das mensagens de conversa
     if extra_system_parts:
@@ -167,15 +178,23 @@ def build_graph():
 
     builder.set_entry_point("detect_language")
     builder.add_edge("detect_language", "check_admin")
-    builder.add_conditional_edges("check_admin", route_mode, {
-        "normal": "normal",
-        "maintenance": "maintenance",
-    })
+    builder.add_conditional_edges(
+        "check_admin",
+        route_mode,
+        {
+            "normal": "normal",
+            "maintenance": "maintenance",
+        },
+    )
     # Loop tools: normal -> tools -> normal (até não ter mais tool_calls)
-    builder.add_conditional_edges("normal", tools_condition, {
-        "tools": "tools",
-        "__end__": END,
-    })
+    builder.add_conditional_edges(
+        "normal",
+        tools_condition,
+        {
+            "tools": "tools",
+            "__end__": END,
+        },
+    )
     builder.add_edge("tools", "normal")
     builder.add_edge("maintenance", END)
 
