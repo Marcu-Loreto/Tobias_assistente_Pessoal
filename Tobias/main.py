@@ -2,6 +2,7 @@
 main.py — Interface Streamlit do Agente Tobias
 Responsabilidade única: UI, gerenciamento de sessão e invocação do grafo.
 """
+
 import streamlit as st
 import os
 from dotenv import load_dotenv
@@ -19,6 +20,7 @@ from app.router.model_selector import select_model
 
 # Validação de chave de API
 import os
+
 api_key = os.getenv("OPENAI_API_KEY")
 
 # -------------------------------------------------------
@@ -40,7 +42,9 @@ st.markdown(
 )
 
 if not api_key:
-    st.error("⚠️ `OPENAI_API_KEY` não encontrada no `.env`. Adicione sua chave para continuar.")
+    st.error(
+        "⚠️ `OPENAI_API_KEY` não encontrada no `.env`. Adicione sua chave para continuar."
+    )
     st.stop()
 
 # -------------------------------------------------------
@@ -48,6 +52,7 @@ if not api_key:
 # -------------------------------------------------------
 if "session_id" not in st.session_state:
     import uuid
+
     st.session_state.session_id = str(uuid.uuid4())
 
 session_id = st.session_state.session_id
@@ -80,22 +85,32 @@ with st.sidebar:
         st.success("🧠 Memória Semântica: Qdrant ativo")
     else:
         st.warning("🧠 Memória Semântica: Qdrant offline")
-        
+
     col1, col2 = st.columns(2)
-    if col1.button("🗑️ Limpar Redis", use_container_width=True, help="Apaga o histórico conversacional atual."):
+    if col1.button(
+        "🗑️ Limpar Redis",
+        use_container_width=True,
+        help="Apaga o histórico conversacional atual.",
+    ):
         if redis_memory.available:
             redis_memory.clear(session_id)
         st.session_state.messages = []
         st.rerun()
-        
-    if col2.button("🗑️ Limpar Qdrant", use_container_width=True, help="Deleta a coleção inteira e vetoriza do zero."):
+
+    if col2.button(
+        "🗑️ Limpar Qdrant",
+        use_container_width=True,
+        help="Deleta a coleção inteira e vetoriza do zero.",
+    ):
         if qdrant_memory.available:
             qdrant_memory.reset_collection()
         st.session_state.messages = []
         st.rerun()
 
     st.divider()
-    st.caption("**Skills Ativas:** 🔍 Web Search Avançada | 🧮 Calculadora | 🛡️ Segurança | 📄 Relatórios C-Level")
+    st.caption(
+        "**Skills Ativas:** 🔍 Web Search Avançada | 🧮 Calculadora | 🛡️ Segurança | 📄 Relatórios C-Level"
+    )
 
 # -------------------------------------------------------
 # Renderizar Histórico de Mensagens
@@ -108,7 +123,6 @@ for msg in st.session_state.messages:
 # Lógica de Input e Invocação do Grafo
 # -------------------------------------------------------
 if prompt := st.chat_input("Digite sua mensagem aqui..."):
-
     # Exibe a mensagem do usuário imediatamente
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
@@ -120,40 +134,58 @@ if prompt := st.chat_input("Digite sua mensagem aqui..."):
         document_context = "\n--- INÍCIO DOS DOCUMENTOS FORNECIDOS ---\n"
         for uf in uploaded_files:
             text = parse_uploaded_file(uf)
-            document_context += f"**Arquivo:** {uf.name}\n{text}\n{'='*30}\n"
+            document_context += f"**Arquivo:** {uf.name}\n{text}\n{'=' * 30}\n"
             uf.seek(0)  # Reseta o ponteiro para reutilização
         document_context += "--- FIM DOS DOCUMENTOS FORNECIDOS ---\n"
 
     # Detecta se é uma solicitação de relatório
-    trigger_words = ["relatório", "relatorio", "análise", "analise",
-                     "documento", "dataset", "dados", "report"]
+    trigger_words = [
+        "relatório",
+        "relatorio",
+        "análise",
+        "analise",
+        "documento",
+        "dataset",
+        "dados",
+        "report",
+    ]
     is_report_request = (
-        any(word in prompt.lower() for word in trigger_words)
-        or len(uploaded_files) > 0
+        any(word in prompt.lower() for word in trigger_words) or len(uploaded_files) > 0
     )
 
     # Detecta se possui intenção clara de pesquisa profunda na web
-    search_trigger_words = ["pesquise", "pesquisa", "busque na web", "investigue", "dossiê", "buscar", "pesquisar"]
+    search_trigger_words = [
+        "pesquise",
+        "pesquisa",
+        "busque na web",
+        "investigue",
+        "dossiê",
+        "buscar",
+        "pesquisar",
+    ]
     is_search_request = any(word in prompt.lower() for word in search_trigger_words)
 
-    # Avaliação dinâmica de roteamento de IA baseada na complexidade    
+    # Avaliação dinâmica de roteamento de IA baseada na complexidade
     model_id = select_model(
         prompt=prompt,
         is_report_request=is_report_request,
         is_search_request=is_search_request,
-        has_documents=bool(document_context)
+        has_documents=bool(document_context),
     )
 
     # Monta o input final (prompt + contexto de documentos)
     final_input = prompt
     if document_context:
-        final_input += "\n\nAnalise o(s) documento(s) abaixo com base no meu pedido:\n" + document_context
+        final_input += (
+            "\n\nAnalise o(s) documento(s) abaixo com base no meu pedido:\n"
+            + document_context
+        )
 
     # Constrói a lista de mensagens LangChain a partir do histórico
     SYSTEM_PROMPT = get_system_prompt()
     api_messages = [SystemMessage(content=SYSTEM_PROMPT)]
 
-    for msg in st.session_state.messages[:-1]:   # histórico sem o prompt atual
+    for msg in st.session_state.messages[:-1]:  # histórico sem o prompt atual
         if msg["role"] == "user":
             api_messages.append(HumanMessage(content=msg["content"]))
         elif msg["role"] == "assistant":
@@ -183,8 +215,24 @@ if prompt := st.chat_input("Digite sua mensagem aqui..."):
         if final_state.get("admin_validated"):
             bot_response = final_state.get("response", "")
         else:
-            bot_response = final_state["messages"][-1].content
-            
+            messages = final_state.get("messages", [])
+            bot_response = ""
+            for msg in reversed(messages):
+                if hasattr(msg, "type") and msg.type == "ai":
+                    content = msg.content
+                    if isinstance(content, str) and content.strip():
+                        bot_response = content
+                        break
+                    elif isinstance(content, list):
+                        for item in content:
+                            if isinstance(item, dict) and item.get("type") == "text":
+                                text_val = item.get("text", "")
+                                if text_val.strip():
+                                    bot_response = text_val
+                                    break
+                        if bot_response:
+                            break
+
         # Pós-processamento de segurança (Anti-Alucinação de Links)
         # Varre a resposta do modelo atrás de URLs e frita tudo que for 404 antes do usuário ver
         bot_response = verify_and_scrub_links(bot_response)
